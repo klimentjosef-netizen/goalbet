@@ -78,6 +78,8 @@ input:focus,select:focus{outline:none;border-color:var(--g)}
 /* Goal btn */
 .goal-btn{background:var(--green);color:#fff;border:none;border-radius:var(--rad);padding:7px 14px;font-family:'Bebas Neue',sans-serif;font-size:14px;cursor:pointer;letter-spacing:1px;transition:opacity .15s,transform .1s}
 .goal-btn:active{transform:scale(.95)}
+.assist-btn{background:#3498db;color:#fff;border:none;border-radius:var(--rad);padding:7px 14px;font-family:'Bebas Neue',sans-serif;font-size:14px;cursor:pointer;letter-spacing:1px;transition:opacity .15s,transform .1s}
+.assist-btn:active{transform:scale(.95)}
 /* Goal log */
 .g-log-item{font-size:12px;color:var(--t2);padding:5px 0;border-bottom:0.5px solid #181818}
 .g-log-item:last-child{border-bottom:none}
@@ -116,17 +118,15 @@ select option{background:#1a1a1a}
       <input id="c-name" placeholder="např. Pepa" maxlength="20"/>
       <div class="sub-label">Sázka za gól (Kč)</div>
       <input id="c-bet" type="number" value="100" min="10"/>
+      <div class="sub-label">Sázka za asistenci (Kč)</div>
+      <input id="c-assist-bet" type="number" value="50" min="0"/>
       <div class="sub-label">Systém draftu</div>
       <select id="c-draft">
         <option value="manual">Manuální draft (střídavý výběr)</option>
         <option value="snake">Snake draft (1-2-2-1 pořadí)</option>
       </select>
       <div class="sub-label">Počet hráčů na osobu</div>
-      <select id="c-picks">
-        <option value="5">5 hráčů</option>
-        <option value="8" selected>8 hráčů</option>
-        <option value="11">11 hráčů</option>
-      </select>
+      <input id="c-picks" type="number" value="8" min="1" max="30"/>
       <button class="btn" onclick="createRoom()">Vytvořit místnost</button>
     </div>
 
@@ -164,10 +164,6 @@ select option{background:#1a1a1a}
         <div class="sub-label">Filtrovat ligu</div>
         <select id="l-league-sel" onchange="renderMatches()">
           <option value="">Všechny</option>
-          <option value="Champions League">Champions League</option>
-          <option value="Premier League">Premier League</option>
-          <option value="La Liga">La Liga</option>
-          <option value="Bundesliga">Bundesliga</option>
           <option value="custom">Vlastní zápasy</option>
         </select>
       </div>
@@ -234,6 +230,7 @@ select option{background:#1a1a1a}
       </div>
       <div class="card">
         <div class="info-row"><div class="info-lbl">Sázka za gól</div><div class="info-val" id="g-bet-lbl"></div></div>
+        <div class="info-row"><div class="info-lbl">Sázka za asistenci</div><div class="info-val" id="g-assist-lbl"></div></div>
         <div class="info-row"><div class="info-lbl">Celkový dluh</div><div class="info-val" id="g-debt"></div></div>
         <div class="info-row"><div class="info-lbl">Kdo dluží</div><div class="info-val" id="g-owes"></div></div>
       </div>
@@ -244,7 +241,7 @@ select option{background:#1a1a1a}
       <div class="card">
         <div class="sec-title">Průběh</div>
         <div id="g-log"></div>
-        <button class="btn sec" onclick="undoGoal()" style="margin-top:10px">↩ Vrátit poslední gól</button>
+        <button class="btn sec" onclick="undoGoal()" style="margin-top:10px">↩ Vrátit poslední událost</button>
       </div>
     </div>
 
@@ -258,7 +255,7 @@ select option{background:#1a1a1a}
         <div id="ledger-summary"></div>
       </div>
       <div class="card">
-        <div class="sec-title">Gólové události</div>
+        <div class="sec-title">Události</div>
         <div id="ledger-events"></div>
       </div>
       <button class="btn red" onclick="confirmReset()" style="margin-top:4px">Ukončit hru</button>
@@ -291,12 +288,43 @@ function handleMsg(msg) {
   if (msg.type === 'joined') {
     myIdx = msg.playerIndex;
     allMatches = msg.matches || [];
+    buildLeagueFilter();
     applyState(msg.state);
   } else if (msg.type === 'state') {
+    if (msg.state.matches && msg.state.matches.length) {
+      allMatches = msg.state.matches;
+      buildLeagueFilter();
+    }
     applyState(msg.state);
   } else if (msg.type === 'error') {
     toast(msg.text, true);
   }
+}
+
+function buildLeagueFilter() {
+  const sel = $('l-league-sel');
+  if (!sel) return;
+  const leagues = new Set();
+  allMatches.forEach(m => { if (m.league) leagues.add(m.league); });
+  // Keep first two options (Všechny + Vlastní zápasy)
+  while (sel.options.length > 2) sel.remove(2);
+  // Insert league options before "Vlastní zápasy"
+  const customOpt = sel.options[1]; // "Vlastní zápasy"
+  [...leagues].sort().forEach(league => {
+    const opt = document.createElement('option');
+    opt.value = league;
+    opt.textContent = league;
+    sel.insertBefore(opt, customOpt);
+  });
+}
+
+function formatMatchDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
 }
 
 function applyState(s) {
@@ -333,6 +361,7 @@ function createRoom() {
     type: 'create_room',
     name,
     bet: parseInt($('c-bet').value) || 100,
+    assistBet: parseInt($('c-assist-bet').value) || 50,
     draftType: $('c-draft').value,
     picks: parseInt($('c-picks').value) || 8,
   }));
@@ -396,7 +425,8 @@ function renderMatches() {
       const sel = state.settings.selectedMatches.includes(m.id);
       const d = document.createElement('div');
       d.className = 'match-card' + (sel ? ' sel' : '');
-      d.innerHTML = `<div class="match-teams">${m.home} <span style="color:var(--t3)">vs</span> ${m.away}</div><div class="match-meta">${m.league} ${sel ? '✓' : ''}</div>`;
+      const dateStr = m.date ? ' · ' + formatMatchDate(m.date) : '';
+      d.innerHTML = `<div class="match-teams">${m.home} <span style="color:var(--t3)">vs</span> ${m.away}</div><div class="match-meta">${m.league}${dateStr} ${sel ? '✓' : ''}</div>`;
       d.onclick = () => {
         if (myIdx !== 0) return toast('Jen hostitel vybírá zápasy');
         send({ type: 'select_match', matchId: m.id, selected: !sel });
@@ -521,22 +551,30 @@ function getMatchName(mid) {
 // ─── GAME ──────────────────────────────────────────────────────────────────
 function renderGame() {
   if (!state) return;
-  const goals = state.goals || [];
-  const s0 = goals.filter(g => g.owner === 0).length;
-  const s1 = goals.filter(g => g.owner === 1).length;
-  $('gs1').textContent = s0; $('gs2').textContent = s1;
+  const events = state.goals || [];
+  const goals = events.filter(e => e.eventType !== 'assist');
+  const assists = events.filter(e => e.eventType === 'assist');
+  const g0 = goals.filter(g => g.owner === 0).length;
+  const g1 = goals.filter(g => g.owner === 1).length;
+  const a0 = assists.filter(a => a.owner === 0).length;
+  const a1 = assists.filter(a => a.owner === 1).length;
+  $('gs1').textContent = g0; $('gs2').textContent = g1;
   $('gn1').textContent = state.players[0]?.name || '—';
   $('gn2').textContent = state.players[1]?.name || '—';
 
   const bet = state.settings.bet || 100;
+  const assistBet = state.settings.assistBet || 50;
   $('g-bet-lbl').textContent = bet + ' Kč / gól';
-  const diff = s0 - s1;
-  const debt = Math.abs(diff) * bet;
+  $('g-assist-lbl').textContent = assistBet + ' Kč / asistence';
+  const val0 = g0 * bet + a0 * assistBet;
+  const val1 = g1 * bet + a1 * assistBet;
+  const diff = val0 - val1;
+  const debt = Math.abs(diff);
   $('g-debt').textContent = debt + ' Kč';
   if (diff === 0) $('g-owes').textContent = 'Vyrovnáno';
   else $('g-owes').textContent = (diff > 0 ? state.players[1]?.name : state.players[0]?.name) + ' dluží';
 
-  // Goal buttons
+  // Goal + Assist buttons
   const area = $('g-goal-area');
   area.innerHTML = '';
   [0, 1].forEach(ri => {
@@ -548,6 +586,7 @@ function renderGame() {
     area.appendChild(hdr);
     roster.forEach(p => {
       const gc = goals.filter(g => g.playerName === p.n && g.owner === ri).length;
+      const ac = assists.filter(a => a.playerName === p.n && a.owner === ri).length;
       const row = document.createElement('div');
       row.className = 'p-row';
       row.innerHTML = `
@@ -555,9 +594,11 @@ function renderGame() {
           <div class="p-name">${p.n}</div>
           <div class="p-meta">${p.t}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          ${gc > 0 ? `<span style="font-family:'Bebas Neue';font-size:18px;color:var(--g)">⚽ ${gc}</span>` : ''}
+        <div style="display:flex;align-items:center;gap:6px">
+          ${gc > 0 ? `<span style="font-family:'Bebas Neue';font-size:16px;color:var(--g)">⚽${gc}</span>` : ''}
+          ${ac > 0 ? `<span style="font-family:'Bebas Neue';font-size:16px;color:#3498db">🅰${ac}</span>` : ''}
           <button class="goal-btn" onclick="addGoal(${ri},'${p.n.replace(/'/g,"\\'")}')">+ Gól</button>
+          <button class="assist-btn" onclick="addAssist(${ri},'${p.n.replace(/'/g,"\\'")}')">+ Ast</button>
         </div>
       `;
       area.appendChild(row);
@@ -567,13 +608,15 @@ function renderGame() {
   // Log
   const log = $('g-log');
   log.innerHTML = '';
-  [...goals].reverse().slice(0, 25).forEach(g => {
+  [...events].reverse().slice(0, 30).forEach(g => {
     const d = document.createElement('div');
     d.className = 'g-log-item';
-    d.innerHTML = `⚽ <b>${g.playerName}</b> — <span style="color:var(--t2)">${state.players[g.owner]?.name}</span> <span style="color:var(--t3);float:right">${g.time}</span>`;
+    const icon = g.eventType === 'assist' ? '🅰' : '⚽';
+    const label = g.eventType === 'assist' ? 'asistence' : 'gól';
+    d.innerHTML = `${icon} <b>${g.playerName}</b> (${label}) — <span style="color:var(--t2)">${state.players[g.owner]?.name}</span> <span style="color:var(--t3);float:right">${g.time}</span>`;
     log.appendChild(d);
   });
-  if (!goals.length) log.innerHTML = '<div style="color:var(--t3)">Zatím žádné góly</div>';
+  if (!events.length) log.innerHTML = '<div style="color:var(--t3)">Zatím žádné události</div>';
 
   renderRosters();
   renderLedger();
@@ -582,20 +625,26 @@ function renderGame() {
 function addGoal(owner, playerName) {
   send({ type: 'add_goal', owner, playerName });
 }
+function addAssist(owner, playerName) {
+  send({ type: 'add_assist', owner, playerName });
+}
 function undoGoal() { send({ type: 'undo_goal' }); }
 
 function renderRosters() {
   if (!state) return;
   const wrap = $('g-rosters');
   wrap.innerHTML = '';
+  const events = state.goals || [];
+  const goals = events.filter(e => e.eventType !== 'assist');
+  const assists = events.filter(e => e.eventType === 'assist');
   [0, 1].forEach(ri => {
     const roster = state.rosters[ri] || [];
     const card = document.createElement('div');
     card.className = 'card';
-    const goals = state.goals || [];
     card.innerHTML = `<div class="sec-title">${state.players[ri]?.name || '—'}</div>`;
     roster.forEach(p => {
       const gc = goals.filter(g => g.playerName === p.n && g.owner === ri).length;
+      const ac = assists.filter(a => a.playerName === p.n && a.owner === ri).length;
       const row = document.createElement('div');
       row.className = 'p-row';
       row.innerHTML = `
@@ -603,7 +652,10 @@ function renderRosters() {
           <div class="p-name">${p.n}</div>
           <div class="p-meta">${p.t}</div>
         </div>
-        <span style="font-family:'Bebas Neue';font-size:20px;color:${gc > 0 ? 'var(--g)' : 'var(--t3)'}">⚽ ${gc}</span>
+        <div style="display:flex;gap:8px">
+          <span style="font-family:'Bebas Neue';font-size:20px;color:${gc > 0 ? 'var(--g)' : 'var(--t3)'}">⚽ ${gc}</span>
+          <span style="font-family:'Bebas Neue';font-size:20px;color:${ac > 0 ? '#3498db' : 'var(--t3)'}">🅰 ${ac}</span>
+        </div>
       `;
       card.appendChild(row);
     });
@@ -613,35 +665,55 @@ function renderRosters() {
 
 function renderLedger() {
   if (!state) return;
-  const goals = state.goals || [];
+  const events = state.goals || [];
+  const goals = events.filter(e => e.eventType !== 'assist');
+  const assists = events.filter(e => e.eventType === 'assist');
   const bet = state.settings.bet || 100;
-  const s0 = goals.filter(g => g.owner === 0).length;
-  const s1 = goals.filter(g => g.owner === 1).length;
-  const diff = s0 - s1;
+  const assistBet = state.settings.assistBet || 50;
+  const g0 = goals.filter(g => g.owner === 0).length;
+  const g1 = goals.filter(g => g.owner === 1).length;
+  const a0 = assists.filter(a => a.owner === 0).length;
+  const a1 = assists.filter(a => a.owner === 1).length;
+  const val0 = g0 * bet + a0 * assistBet;
+  const val1 = g1 * bet + a1 * assistBet;
+  const diff = val0 - val1;
   $('ledger-summary').innerHTML = `
-    <div class="info-row"><div class="info-lbl">${state.players[0]?.name} góly</div><div class="info-val">${s0} × ${bet} Kč = ${s0 * bet} Kč</div></div>
-    <div class="info-row"><div class="info-lbl">${state.players[1]?.name} góly</div><div class="info-val">${s1} × ${bet} Kč = ${s1 * bet} Kč</div></div>
+    <div class="info-row"><div class="info-lbl">${state.players[0]?.name} góly</div><div class="info-val">${g0} × ${bet} Kč = ${g0 * bet} Kč</div></div>
+    <div class="info-row"><div class="info-lbl">${state.players[0]?.name} asistence</div><div class="info-val">${a0} × ${assistBet} Kč = ${a0 * assistBet} Kč</div></div>
+    <div class="info-row"><div class="info-lbl">${state.players[1]?.name} góly</div><div class="info-val">${g1} × ${bet} Kč = ${g1 * bet} Kč</div></div>
+    <div class="info-row"><div class="info-lbl">${state.players[1]?.name} asistence</div><div class="info-val">${a1} × ${assistBet} Kč = ${a1 * assistBet} Kč</div></div>
+    <div class="info-row" style="border-top:1px solid #2a2a2a;padding-top:8px;margin-top:4px">
+      <div class="info-lbl" style="font-weight:500">${state.players[0]?.name} celkem</div>
+      <div class="info-val">${val0} Kč</div>
+    </div>
+    <div class="info-row">
+      <div class="info-lbl" style="font-weight:500">${state.players[1]?.name} celkem</div>
+      <div class="info-val">${val1} Kč</div>
+    </div>
     <div class="info-row" style="border-top:1px solid #2a2a2a;padding-top:8px;margin-top:4px">
       <div class="info-lbl" style="font-weight:500">Výsledný dluh</div>
-      <div class="info-val" style="color:var(--g)">${Math.abs(diff) * bet} Kč</div>
+      <div class="info-val" style="color:var(--g)">${Math.abs(diff)} Kč</div>
     </div>
     ${diff !== 0 ? `<div class="info-row"><div class="info-lbl">Dluží</div><div class="info-val">${diff > 0 ? state.players[1]?.name : state.players[0]?.name}</div></div>` : '<div class="info-row"><div class="info-lbl">Stav</div><div class="info-val" style="color:var(--green)">Vyrovnáno</div></div>'}
   `;
   const ev = $('ledger-events');
   ev.innerHTML = '';
-  goals.forEach(g => {
+  events.forEach(g => {
     const d = document.createElement('div');
     d.className = 'ledger-item';
+    const isAssist = g.eventType === 'assist';
+    const icon = isAssist ? '🅰' : '⚽';
+    const amount = isAssist ? assistBet : bet;
     d.innerHTML = `
       <div>
-        <div style="font-weight:500">${g.playerName}</div>
-        <div style="font-size:11px;color:var(--t3)">${state.players[g.owner]?.name} · ${g.time}</div>
+        <div style="font-weight:500">${icon} ${g.playerName}</div>
+        <div style="font-size:11px;color:var(--t3)">${state.players[g.owner]?.name} · ${isAssist ? 'asistence' : 'gól'} · ${g.time}</div>
       </div>
-      <span style="color:var(--g);font-weight:500">+${bet} Kč</span>
+      <span style="color:${isAssist ? '#3498db' : 'var(--g)'};font-weight:500">+${amount} Kč</span>
     `;
     ev.appendChild(d);
   });
-  if (!goals.length) ev.innerHTML = '<div style="color:var(--t3);padding:4px">Žádné góly</div>';
+  if (!events.length) ev.innerHTML = '<div style="color:var(--t3);padding:4px">Žádné události</div>';
 }
 
 function gtab(tab, btn) {
