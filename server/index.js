@@ -117,6 +117,7 @@ function handleMessage(ws, msg) {
   switch (msg.type) {
     case 'create_room': return handleCreateRoom(ws, msg);
     case 'join_room': return handleJoinRoom(ws, msg);
+    case 'rejoin_room': return handleRejoinRoom(ws, msg);
     case 'select_match': return handleSelectMatch(ws, msg);
     case 'add_custom_match': return handleAddCustomMatch(ws, msg);
     case 'start_game': return handleStartGame(ws, msg);
@@ -161,6 +162,29 @@ async function handleJoinRoom(ws, msg) {
   clients.set(ws, { roomCode: code.toUpperCase(), playerIndex: 1, name });
   const apiMatches = await getUpcomingMatches();
   sendToClient(ws, { type: 'joined', playerIndex: 1, roomCode: code.toUpperCase(), state: getPublicState(room, apiMatches), matches: apiMatches });
+  broadcast(code.toUpperCase(), { type: 'state', state: getPublicState(room, apiMatches) }, ws);
+}
+
+async function handleRejoinRoom(ws, msg) {
+  const { name, code, playerIndex } = msg;
+  const room = rooms.get(code?.toUpperCase());
+  if (!room) return sendToClient(ws, { type: 'error', text: 'Místnost nenalezena' });
+  // Verify this player was in the room
+  const existingPlayer = room.players[playerIndex];
+  if (!existingPlayer || existingPlayer.name !== name) {
+    return sendToClient(ws, { type: 'error', text: 'Nelze se připojit zpět' });
+  }
+  // Disconnect old ws for this player if still connected
+  for (const [oldWs, info] of clients.entries()) {
+    if (info.roomCode === code.toUpperCase() && info.playerIndex === playerIndex) {
+      clients.delete(oldWs);
+      try { oldWs.close(); } catch {}
+    }
+  }
+  room.players[playerIndex] = { name, online: true };
+  clients.set(ws, { roomCode: code.toUpperCase(), playerIndex, name });
+  const apiMatches = await getUpcomingMatches();
+  sendToClient(ws, { type: 'joined', playerIndex, roomCode: code.toUpperCase(), state: getPublicState(room, apiMatches), matches: apiMatches });
   broadcast(code.toUpperCase(), { type: 'state', state: getPublicState(room, apiMatches) }, ws);
 }
 

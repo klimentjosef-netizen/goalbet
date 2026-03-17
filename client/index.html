@@ -197,6 +197,10 @@ select option{background:#1a1a1a}
       <div class="sub-label">Tvoji hráči</div>
       <div class="my-picks" id="d-my-picks"></div>
     </div>
+    <div id="d-opp-picks-wrap" style="margin-bottom:10px">
+      <div class="sub-label">Soupeřovi hráči</div>
+      <div class="my-picks" id="d-opp-picks"></div>
+    </div>
 
     <div class="card">
       <div class="filter-row">
@@ -231,8 +235,8 @@ select option{background:#1a1a1a}
       <div class="card">
         <div class="info-row"><div class="info-lbl">Sázka za gól</div><div class="info-val" id="g-bet-lbl"></div></div>
         <div class="info-row"><div class="info-lbl">Sázka za asistenci</div><div class="info-val" id="g-assist-lbl"></div></div>
-        <div class="info-row"><div class="info-lbl">Celkový dluh</div><div class="info-val" id="g-debt"></div></div>
-        <div class="info-row"><div class="info-lbl">Kdo dluží</div><div class="info-val" id="g-owes"></div></div>
+        <div class="info-row"><div class="info-lbl">Celkem do čuníka</div><div class="info-val" id="g-debt"></div></div>
+        <div class="info-row"><div class="info-lbl">Platí</div><div class="info-val" id="g-owes"></div></div>
       </div>
       <div class="card">
         <div class="sec-title">Zaznamenat gól</div>
@@ -284,10 +288,19 @@ function startPing() { pingTimer = setInterval(() => send({ type: 'ping' }), 200
 function stopPing() { clearInterval(pingTimer); }
 function send(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
 
+function saveSession(code, name, idx) {
+  localStorage.setItem('ps_session', JSON.stringify({ code, name, playerIndex: idx }));
+}
+function clearSession() { localStorage.removeItem('ps_session'); }
+function getSession() {
+  try { return JSON.parse(localStorage.getItem('ps_session')); } catch { return null; }
+}
+
 function handleMsg(msg) {
   if (msg.type === 'joined') {
     myIdx = msg.playerIndex;
     allMatches = msg.matches || [];
+    saveSession(msg.roomCode, msg.state.players[myIdx]?.name, myIdx);
     buildLeagueFilter();
     applyState(msg.state);
   } else if (msg.type === 'state') {
@@ -494,6 +507,19 @@ function renderDraft() {
     myPicks.appendChild(t);
   });
 
+  // Opponent picks
+  const oppIdx = myIdx === 0 ? 1 : 0;
+  const oppPicks = $('d-opp-picks');
+  oppPicks.innerHTML = '';
+  (state.rosters[oppIdx] || []).forEach(p => {
+    const t = document.createElement('span');
+    t.className = 'tag';
+    t.style.borderColor = 'var(--red)';
+    t.style.color = 'var(--red)';
+    t.textContent = p.n;
+    oppPicks.appendChild(t);
+  });
+
   // Filter select
   const fil = $('d-filter');
   if (fil.options.length <= 1) {
@@ -566,13 +592,12 @@ function renderGame() {
   const assistBet = state.settings.assistBet || 50;
   $('g-bet-lbl').textContent = bet + ' Kč / gól';
   $('g-assist-lbl').textContent = assistBet + ' Kč / asistence';
-  const val0 = g0 * bet + a0 * assistBet;
-  const val1 = g1 * bet + a1 * assistBet;
-  const diff = val0 - val1;
-  const debt = Math.abs(diff);
-  $('g-debt').textContent = debt + ' Kč';
-  if (diff === 0) $('g-owes').textContent = 'Vyrovnáno';
-  else $('g-owes').textContent = (diff > 0 ? state.players[1]?.name : state.players[0]?.name) + ' dluží';
+  // Each player pays for opponent's goals+assists into piggy bank
+  const pay0 = g1 * bet + a1 * assistBet; // player 0 pays for player 1's events
+  const pay1 = g0 * bet + a0 * assistBet; // player 1 pays for player 0's events
+  const total = pay0 + pay1;
+  $('g-debt').textContent = total + ' Kč';
+  $('g-owes').innerHTML = `${state.players[0]?.name}: <b>${pay0} Kč</b> · ${state.players[1]?.name}: <b>${pay1} Kč</b>`;
 
   // Goal + Assist buttons
   const area = $('g-goal-area');
@@ -674,27 +699,29 @@ function renderLedger() {
   const g1 = goals.filter(g => g.owner === 1).length;
   const a0 = assists.filter(a => a.owner === 0).length;
   const a1 = assists.filter(a => a.owner === 1).length;
-  const val0 = g0 * bet + a0 * assistBet;
-  const val1 = g1 * bet + a1 * assistBet;
-  const diff = val0 - val1;
+  // Each player pays for opponent's goals+assists
+  const pay0 = g1 * bet + a1 * assistBet;
+  const pay1 = g0 * bet + a0 * assistBet;
+  const total = pay0 + pay1;
   $('ledger-summary').innerHTML = `
     <div class="info-row"><div class="info-lbl">${state.players[0]?.name} góly</div><div class="info-val">${g0} × ${bet} Kč = ${g0 * bet} Kč</div></div>
     <div class="info-row"><div class="info-lbl">${state.players[0]?.name} asistence</div><div class="info-val">${a0} × ${assistBet} Kč = ${a0 * assistBet} Kč</div></div>
     <div class="info-row"><div class="info-lbl">${state.players[1]?.name} góly</div><div class="info-val">${g1} × ${bet} Kč = ${g1 * bet} Kč</div></div>
     <div class="info-row"><div class="info-lbl">${state.players[1]?.name} asistence</div><div class="info-val">${a1} × ${assistBet} Kč = ${a1 * assistBet} Kč</div></div>
-    <div class="info-row" style="border-top:1px solid #2a2a2a;padding-top:8px;margin-top:4px">
-      <div class="info-lbl" style="font-weight:500">${state.players[0]?.name} celkem</div>
-      <div class="info-val">${val0} Kč</div>
+    <hr class="divider"/>
+    <div class="sec-title" style="margin-top:4px">Do čuníka</div>
+    <div class="info-row">
+      <div class="info-lbl" style="font-weight:500">${state.players[0]?.name} platí</div>
+      <div class="info-val" style="color:var(--red)">${pay0} Kč</div>
     </div>
     <div class="info-row">
-      <div class="info-lbl" style="font-weight:500">${state.players[1]?.name} celkem</div>
-      <div class="info-val">${val1} Kč</div>
+      <div class="info-lbl" style="font-weight:500">${state.players[1]?.name} platí</div>
+      <div class="info-val" style="color:var(--red)">${pay1} Kč</div>
     </div>
     <div class="info-row" style="border-top:1px solid #2a2a2a;padding-top:8px;margin-top:4px">
-      <div class="info-lbl" style="font-weight:500">Výsledný dluh</div>
-      <div class="info-val" style="color:var(--g)">${Math.abs(diff)} Kč</div>
+      <div class="info-lbl" style="font-weight:500">Celkem v čuníkovi</div>
+      <div class="info-val" style="color:var(--g)">${total} Kč</div>
     </div>
-    ${diff !== 0 ? `<div class="info-row"><div class="info-lbl">Dluží</div><div class="info-val">${diff > 0 ? state.players[1]?.name : state.players[0]?.name}</div></div>` : '<div class="info-row"><div class="info-lbl">Stav</div><div class="info-val" style="color:var(--green)">Vyrovnáno</div></div>'}
   `;
   const ev = $('ledger-events');
   ev.innerHTML = '';
@@ -723,11 +750,16 @@ function gtab(tab, btn) {
 }
 
 function confirmReset() {
-  if (confirm('Ukončit hru?')) location.reload();
+  if (confirm('Ukončit hru?')) { clearSession(); location.reload(); }
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
-connect();
+const session = getSession();
+if (session) {
+  connect(() => send({ type: 'rejoin_room', code: session.code, name: session.name, playerIndex: session.playerIndex }));
+} else {
+  connect();
+}
 </script>
 </body>
 </html>
