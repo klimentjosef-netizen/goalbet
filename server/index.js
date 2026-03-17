@@ -88,6 +88,8 @@ function getPublicState(room, apiMatches) {
     goals: room.goals,
     draftOrder: room.draftOrder,
     draftPos: room.draftPos,
+    draftHistory: room.draftHistory || [],
+    chatMessages: room.chatMessages || [],
     matches: apiMatches || [],
   };
 }
@@ -125,6 +127,7 @@ function handleMessage(ws, msg) {
     case 'add_goal': return handleAddGoal(ws, msg);
     case 'add_assist': return handleAddAssist(ws, msg);
     case 'undo_goal': return handleUndoGoal(ws, msg);
+    case 'chat': return handleChat(ws, msg);
     case 'ping': sendToClient(ws, { type: 'pong' }); break;
   }
 }
@@ -145,6 +148,8 @@ async function handleCreateRoom(ws, msg) {
     goals: [],
     draftOrder: [],
     draftPos: 0,
+    draftHistory: [],
+    chatMessages: [],
     createdAt: Date.now(),
   };
   rooms.set(code, room);
@@ -196,7 +201,7 @@ async function handleSelectMatch(ws, msg) {
   const { matchId, selected } = msg;
   const sel = room.settings.selectedMatches;
   if (selected) {
-    if (sel.length >= 4) return sendToClient(ws, { type: 'error', text: 'Max 4 zápasy' });
+    if (sel.length >= 8) return sendToClient(ws, { type: 'error', text: 'Max 8 zápasů' });
     if (!sel.includes(matchId)) sel.push(matchId);
   } else {
     const i = sel.indexOf(matchId);
@@ -261,7 +266,9 @@ async function handleDraftPick(ws, msg) {
   const { playerIdx } = msg;
   if (room.drafted[playerIdx]) return sendToClient(ws, { type: 'error', text: 'Hráč již byl draftován' });
   room.drafted[playerIdx] = true;
-  room.rosters[info.playerIndex].push({ ...room.allPlayers[playerIdx], goals: 0 });
+  const pickedPlayer = room.allPlayers[playerIdx];
+  room.rosters[info.playerIndex].push({ ...pickedPlayer, goals: 0 });
+  room.draftHistory.push({ pick: room.draftPos + 1, playerIndex: info.playerIndex, playerName: pickedPlayer.n, team: pickedPlayer.t });
   room.draftPos++;
   const picks = room.settings.picks;
   if (room.rosters[0].length >= picks && room.rosters[1].length >= picks) {
@@ -309,6 +316,22 @@ async function handleUndoGoal(ws, msg) {
   const apiMatches = await getUpcomingMatches();
   broadcast(info.roomCode, { type: 'state', state: getPublicState(room, apiMatches) });
   sendToClient(ws, { type: 'state', state: getPublicState(room, apiMatches) });
+}
+
+async function handleChat(ws, msg) {
+  const info = clients.get(ws);
+  if (!info) return;
+  const room = rooms.get(info.roomCode);
+  if (!room) return;
+  const text = (msg.text || '').trim().slice(0, 200);
+  if (!text) return;
+  const now = new Date();
+  const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+  room.chatMessages.push({ name: info.name, text, time, playerIndex: info.playerIndex });
+  if (room.chatMessages.length > 100) room.chatMessages.shift();
+  const chatMsg = { type: 'chat', name: info.name, text, time, playerIndex: info.playerIndex };
+  broadcast(info.roomCode, chatMsg);
+  sendToClient(ws, chatMsg);
 }
 
 // --- CLEANUP old rooms every hour ---

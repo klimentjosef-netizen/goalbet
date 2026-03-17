@@ -101,6 +101,19 @@ input:focus,select:focus{outline:none;border-color:var(--g)}
 select option{background:#1a1a1a}
 .filter-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .filter-row select{margin:0;flex:1}
+/* Chat */
+.chat-toggle{position:fixed;bottom:16px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--g);color:#000;border:none;font-size:22px;cursor:pointer;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+.chat-badge{position:absolute;top:-2px;right:-2px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center}
+.chat-panel{position:fixed;bottom:74px;right:16px;width:300px;max-height:350px;background:var(--d2);border:0.5px solid #333;border-radius:12px;z-index:100;display:none;flex-direction:column;overflow:hidden}
+.chat-panel.open{display:flex}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;max-height:260px}
+.chat-msg{margin-bottom:8px;font-size:13px}
+.chat-msg .chat-name{font-weight:500;color:var(--g);font-size:11px}
+.chat-msg .chat-text{color:var(--t1);margin-top:1px}
+.chat-msg .chat-time{color:var(--t3);font-size:10px}
+.chat-input-row{display:flex;gap:6px;padding:8px 12px;border-top:0.5px solid #333}
+.chat-input-row input{margin:0;flex:1;font-size:13px;padding:8px}
+.chat-input-row button{width:auto;padding:8px 14px;margin:0}
 </style>
 </head>
 <body>
@@ -159,7 +172,7 @@ select option{background:#1a1a1a}
 
     <div class="card" id="l-match-card">
       <div class="sec-title">Vyber zápasy</div>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:10px">Vyber 1–4 zápasy pro draft (jen hostitel)</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px">Vyber 1–8 zápasů pro draft (jen hostitel)</div>
       <div id="l-league-filter" style="margin-bottom:10px">
         <div class="sub-label">Filtrovat ligu</div>
         <select id="l-league-sel" onchange="renderMatches()">
@@ -218,6 +231,7 @@ select option{background:#1a1a1a}
     <div class="tabs">
       <button class="tab active" onclick="gtab('live',this)">Live</button>
       <button class="tab" onclick="gtab('roster',this)">Sestavy</button>
+      <button class="tab" onclick="gtab('draft-history',this)">Draft</button>
       <button class="tab" onclick="gtab('ledger',this)">Účetnictví</button>
     </div>
 
@@ -253,6 +267,10 @@ select option{background:#1a1a1a}
       <div id="g-rosters"></div>
     </div>
 
+    <div id="gt-draft-history" style="display:none">
+      <div id="g-draft-history"></div>
+    </div>
+
     <div id="gt-ledger" style="display:none">
       <div class="card">
         <div class="sec-title">Přehled dluhu</div>
@@ -267,6 +285,19 @@ select option{background:#1a1a1a}
   </div>
 </div>
 
+<!-- CHAT -->
+<button class="chat-toggle" id="chat-toggle" onclick="toggleChat()" style="display:none">
+  💬
+  <span class="chat-badge" id="chat-badge" style="display:none">0</span>
+</button>
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-row">
+    <input id="chat-input" placeholder="Napiš zprávu..." maxlength="200" onkeydown="if(event.key==='Enter')sendChat()"/>
+    <button class="btn sm" onclick="sendChat()">→</button>
+  </div>
+</div>
+
 <script>
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let ws = null;
@@ -278,7 +309,15 @@ const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.
 // ─── WS ────────────────────────────────────────────────────────────────────
 function connect(onOpen) {
   ws = new WebSocket(WS_URL);
-  ws.onopen = () => { if (onOpen) onOpen(); startPing(); };
+  ws.onopen = () => {
+    if (onOpen) { onOpen(); }
+    else {
+      // Auto-rejoin on reconnect
+      const s = getSession();
+      if (s) send({ type: 'rejoin_room', code: s.code, name: s.name, playerIndex: s.playerIndex });
+    }
+    startPing();
+  };
   ws.onmessage = e => handleMsg(JSON.parse(e.data));
   ws.onclose = () => { stopPing(); setTimeout(() => connect(), 2000); };
   ws.onerror = () => ws.close();
@@ -309,6 +348,8 @@ function handleMsg(msg) {
       buildLeagueFilter();
     }
     applyState(msg.state);
+  } else if (msg.type === 'chat') {
+    appendChatMessage(msg);
   } else if (msg.type === 'error') {
     toast(msg.text, true);
   }
@@ -343,9 +384,10 @@ function formatMatchDate(dateStr) {
 function applyState(s) {
   state = s;
   showScreen(s.screen);
+  $('chat-toggle').style.display = (s.screen !== 'home') ? 'flex' : 'none';
   if (s.screen === 'lobby') renderLobby();
   else if (s.screen === 'draft') renderDraft();
-  else if (s.screen === 'game') renderGame();
+  else if (s.screen === 'game') { renderGame(); renderDraftHistory(); }
 }
 
 // ─── SCREENS ───────────────────────────────────────────────────────────────
@@ -746,11 +788,92 @@ function renderLedger() {
 function gtab(tab, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  ['live', 'roster', 'ledger'].forEach(t => $('gt-' + t).style.display = t === tab ? 'block' : 'none');
+  ['live', 'roster', 'draft-history', 'ledger'].forEach(t => $('gt-' + t).style.display = t === tab ? 'block' : 'none');
 }
 
 function confirmReset() {
   if (confirm('Ukončit hru?')) { clearSession(); location.reload(); }
+}
+
+// ─── DRAFT HISTORY ────────────────────────────────────────────────────────
+function renderDraftHistory() {
+  if (!state) return;
+  const wrap = $('g-draft-history');
+  if (!wrap) return;
+  const history = state.draftHistory || [];
+  wrap.innerHTML = '';
+  if (!history.length) {
+    wrap.innerHTML = '<div class="card"><div style="color:var(--t3);padding:8px">Žádná historie draftu</div></div>';
+    return;
+  }
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = '<div class="sec-title">Historie draftu</div>';
+  history.forEach(h => {
+    const row = document.createElement('div');
+    row.className = 'p-row';
+    const isMe = h.playerIndex === myIdx;
+    const pName = state.players[h.playerIndex]?.name || '?';
+    row.innerHTML = `
+      <div>
+        <div class="p-name">${h.pick}. ${h.playerName}</div>
+        <div class="p-meta">${h.team}</div>
+      </div>
+      <span class="tag ${isMe ? 'gold' : ''}" style="${!isMe ? 'border-color:var(--red);color:var(--red)' : ''}">${pName}</span>
+    `;
+    card.appendChild(row);
+  });
+  wrap.appendChild(card);
+}
+
+// ─── CHAT ─────────────────────────────────────────────────────────────────
+let chatOpen = false;
+let unreadChat = 0;
+let chatLoaded = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  $('chat-panel').classList.toggle('open', chatOpen);
+  if (chatOpen) {
+    unreadChat = 0;
+    $('chat-badge').style.display = 'none';
+    if (!chatLoaded && state && state.chatMessages) {
+      state.chatMessages.forEach(m => appendChatMessage(m, true));
+      chatLoaded = true;
+    }
+    $('chat-input').focus();
+    const msgs = $('chat-messages');
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+}
+
+function appendChatMessage(msg, silent) {
+  const msgs = $('chat-messages');
+  const d = document.createElement('div');
+  d.className = 'chat-msg';
+  d.innerHTML = `<span class="chat-name">${msg.name}</span> <span class="chat-time">${msg.time}</span><div class="chat-text">${escapeHtml(msg.text)}</div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+  if (!chatOpen && !silent) {
+    unreadChat++;
+    const badge = $('chat-badge');
+    badge.textContent = unreadChat;
+    badge.style.display = 'flex';
+  }
+}
+
+function escapeHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+function sendChat() {
+  const input = $('chat-input');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  send({ type: 'chat', text });
+  input.value = '';
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
