@@ -158,7 +158,7 @@ select option{background:#1a1a1a}
     <div class="room-box">
       <div class="sub-label">Kód místnosti — sdílej kamarádovi</div>
       <div class="room-code" id="l-code" onclick="copyCode()" title="Klikni pro kopírování"></div>
-      <div class="room-hint">Klikni pro zkopírování</div>
+      <div class="room-hint">Klikni pro zkopírování odkazu</div>
     </div>
 
     <div class="card">
@@ -329,10 +329,21 @@ function send(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg))
 
 function saveSession(code, name, idx) {
   localStorage.setItem('ps_session', JSON.stringify({ code, name, playerIndex: idx }));
+  // Update URL to /room/CODE
+  if (code && location.pathname !== '/room/' + code) {
+    history.pushState(null, '', '/room/' + code);
+  }
 }
-function clearSession() { localStorage.removeItem('ps_session'); }
+function clearSession() {
+  localStorage.removeItem('ps_session');
+  history.pushState(null, '', '/');
+}
 function getSession() {
   try { return JSON.parse(localStorage.getItem('ps_session')); } catch { return null; }
+}
+function getRoomCodeFromURL() {
+  const m = location.pathname.match(/^\/room\/([A-Z0-9]{4})$/i);
+  return m ? m[1].toUpperCase() : null;
 }
 
 function handleMsg(msg) {
@@ -516,7 +527,8 @@ function addCustomMatch() {
 }
 
 function copyCode() {
-  navigator.clipboard.writeText(state.roomCode).then(() => toast('Kód zkopírován!'));
+  const url = location.origin + '/room/' + state.roomCode;
+  navigator.clipboard.writeText(url).then(() => toast('Odkaz zkopírován!'));
 }
 
 function startGame() {
@@ -877,9 +889,15 @@ function sendChat() {
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
+const urlRoom = getRoomCodeFromURL();
 const session = getSession();
-if (session) {
+if (session && (urlRoom === session.code || !urlRoom)) {
+  // Rejoin existing session
   connect(() => send({ type: 'rejoin_room', code: session.code, name: session.name, playerIndex: session.playerIndex }));
+} else if (urlRoom) {
+  // URL has room code but no session - pre-fill join form
+  $('j-code').value = urlRoom;
+  connect();
 } else {
   connect();
 }
