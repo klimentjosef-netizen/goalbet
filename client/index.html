@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GoalBet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--g:#FFD700;--g2:#e6c000;--dk:#090909;--d1:#0f0f0f;--d2:#161616;--d3:#1e1e1e;--d4:#252525;--t1:#f0f0f0;--t2:#999;--t3:#555;--rad:8px;--green:#2ecc71;--red:#e74c3c}
+html,body{height:100%;background:var(--dk);color:var(--t1);font-family:'DM Sans',sans-serif;font-size:14px;overflow-x:hidden}
+.app{max-width:480px;margin:0 auto;padding:16px 14px 80px}
+h1{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:4px;color:var(--g);line-height:1}
+.tagline{font-size:11px;color:var(--t3);letter-spacing:2px;text-transform:uppercase;margin-bottom:24px}
+.screen{display:none}.screen.active{display:block}
+.card{background:var(--d2);border:0.5px solid #2a2a2a;border-radius:12px;padding:16px;margin-bottom:12px}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:2px;color:var(--g);margin-bottom:12px}
+input,select{background:var(--d3);border:0.5px solid #333;border-radius:var(--rad);color:var(--t1);padding:10px 12px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;margin-bottom:8px;-webkit-appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+input::placeholder{color:var(--t3)}
+input:focus,select:focus{outline:none;border-color:var(--g)}
+.btn{background:var(--g);color:#000;border:none;border-radius:var(--rad);padding:12px 20px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;cursor:pointer;width:100%;margin-bottom:8px;transition:opacity .15s,transform .1s;display:block}
+.btn:active{transform:scale(.98)}
+.btn:hover{opacity:.85}
+.btn.sec{background:transparent;color:var(--g);border:0.5px solid var(--g)}
+.btn.red{background:var(--red);color:#fff}
+.btn.sm{padding:8px 14px;font-size:14px;width:auto;display:inline-block}
+.btn.green{background:var(--green);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.row{display:flex;gap:8px}.row .btn{flex:1}
+/* Status tags */
+.badge{display:inline-block;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:500}
+.badge.ok{background:#1a3a1a;color:var(--green)}
+.badge.wait{background:#2a1a1a;color:var(--red)}
+.tag{display:inline-block;background:var(--d3);border:0.5px solid #333;border-radius:20px;padding:3px 10px;font-size:12px;color:var(--t2);margin:2px}
+.tag.gold{border-color:var(--g);color:var(--g)}
+/* Match cards */
+.match-card{background:var(--d3);border-radius:var(--rad);padding:12px;margin-bottom:6px;cursor:pointer;border:0.5px solid #2a2a2a;transition:border-color .15s,background .15s}
+.match-card:hover{border-color:#444}
+.match-card.sel{border-color:var(--g);background:#1c1900}
+.match-teams{font-size:13px;font-weight:500}
+.match-meta{font-size:11px;color:var(--t3);margin-top:3px}
+/* Room code */
+.room-box{background:var(--d3);border-radius:12px;padding:18px;text-align:center;margin-bottom:12px;border:0.5px solid #333}
+.room-code{font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:10px;color:var(--g);cursor:pointer;user-select:all}
+.room-hint{font-size:11px;color:var(--t3);margin-top:6px}
+/* Waiting dots */
+.dots{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px}
+.dot{width:6px;height:6px;background:var(--g);border-radius:50%;animation:pulse .8s infinite alternate}
+.dot:nth-child(2){animation-delay:.25s}.dot:nth-child(3){animation-delay:.5s}
+@keyframes pulse{to{opacity:.2;transform:scale(.6)}}
+/* Draft */
+.draft-header{background:var(--d2);border:0.5px solid var(--g);border-radius:12px;padding:16px;text-align:center;margin-bottom:12px}
+.draft-whose{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:var(--g)}
+.player-btn{width:100%;text-align:left;background:var(--d3);border:0.5px solid #2a2a2a;border-radius:var(--rad);padding:10px 12px;color:var(--t1);cursor:pointer;margin-bottom:5px;transition:border-color .15s,background .15s;display:flex;justify-content:space-between;align-items:center}
+.player-btn:hover{border-color:var(--g);background:var(--d4)}
+.player-btn.taken{opacity:.35;cursor:default}
+/* Tabs */
+.tabs{display:flex;gap:4px;background:var(--d2);border-radius:var(--rad);padding:4px;margin-bottom:14px}
+.tab{flex:1;padding:9px;border:none;background:transparent;color:var(--t2);border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .15s}
+.tab.active{background:var(--d4);color:var(--t1)}
+/* Score */
+.scores{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.score-box{background:var(--d2);border-radius:10px;padding:16px;text-align:center;border:0.5px solid #2a2a2a}
+.score-num{font-family:'Bebas Neue',sans-serif;font-size:52px;line-height:1;color:var(--g)}
+.score-name{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid #1e1e1e}
+.info-row:last-child{border-bottom:none}
+.info-lbl{color:var(--t3);font-size:12px}
+.info-val{font-size:13px;font-weight:500}
+/* Player rows */
+.p-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:0.5px solid #1a1a1a}
+.p-row:last-child{border-bottom:none}
+.p-name{font-weight:500;font-size:14px}
+.p-meta{font-size:11px;color:var(--t3);margin-top:2px}
+/* Goal btn */
+.goal-btn{background:var(--green);color:#fff;border:none;border-radius:var(--rad);padding:7px 14px;font-family:'Bebas Neue',sans-serif;font-size:14px;cursor:pointer;letter-spacing:1px;transition:opacity .15s,transform .1s}
+.goal-btn:active{transform:scale(.95)}
+/* Goal log */
+.g-log-item{font-size:12px;color:var(--t2);padding:5px 0;border-bottom:0.5px solid #181818}
+.g-log-item:last-child{border-bottom:none}
+/* Notify toast */
+.toast{position:fixed;top:16px;right:16px;left:16px;max-width:400px;margin:0 auto;background:var(--g);color:#000;padding:11px 16px;border-radius:var(--rad);font-weight:500;font-size:13px;z-index:9999;transform:translateY(-80px);opacity:0;transition:all .3s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.err{background:var(--red);color:#fff}
+/* Conn status */
+.conn-dot{width:7px;height:7px;border-radius:50%;background:#555;display:inline-block;margin-right:5px;transition:background .3s}
+.conn-dot.ok{background:var(--green)}
+/* Sections */
+.sub-label{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.divider{border:none;border-top:0.5px solid #222;margin:10px 0}
+/* My picks */
+.my-picks{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;min-height:28px}
+/* Ledger */
+.ledger-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid #181818}
+.ledger-item:last-child{border-bottom:none}
+select option{background:#1a1a1a}
+.filter-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.filter-row select{margin:0;flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toast" id="toast"></div>
+
+  <!-- HOME -->
+  <div id="s-home" class="screen active">
+    <h1>GoalBet</h1>
+    <div class="tagline">fotbalová draft sázková hra</div>
+
+    <div class="card">
+      <div class="sec-title">Vytvořit místnost</div>
+      <div class="sub-label">Tvoje přezdívka</div>
+      <input id="c-name" placeholder="např. Pepa" maxlength="20"/>
+      <div class="sub-label">Sázka za gól (Kč)</div>
+      <input id="c-bet" type="number" value="100" min="10"/>
+      <div class="sub-label">Systém draftu</div>
+      <select id="c-draft">
+        <option value="manual">Manuální draft (střídavý výběr)</option>
+        <option value="snake">Snake draft (1-2-2-1 pořadí)</option>
+      </select>
+      <div class="sub-label">Počet hráčů na osobu</div>
+      <select id="c-picks">
+        <option value="5">5 hráčů</option>
+        <option value="8" selected>8 hráčů</option>
+        <option value="11">11 hráčů</option>
+      </select>
+      <button class="btn" onclick="createRoom()">Vytvořit místnost</button>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">Připojit se</div>
+      <div class="sub-label">Tvoje přezdívka</div>
+      <input id="j-name" placeholder="např. Honza" maxlength="20"/>
+      <div class="sub-label">Kód místnosti</div>
+      <input id="j-code" placeholder="ABCD" maxlength="4" style="text-transform:uppercase;letter-spacing:6px;font-size:22px;text-align:center;font-family:'Bebas Neue',sans-serif"/>
+      <button class="btn sec" onclick="joinRoom()">Připojit se →</button>
+    </div>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="s-lobby" class="screen">
+    <div class="room-box">
+      <div class="sub-label">Kód místnosti — sdílej kamarádovi</div>
+      <div class="room-code" id="l-code" onclick="copyCode()" title="Klikni pro kopírování"></div>
+      <div class="room-hint">Klikni pro zkopírování</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">Hráči</div>
+      <div id="l-players"></div>
+      <div id="l-waiting" class="dots" style="display:none">
+        <span style="font-size:13px;color:var(--t2)">Čeká na druhého hráče</span>
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+    </div>
+
+    <div class="card" id="l-match-card">
+      <div class="sec-title">Vyber zápasy</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px">Vyber 1–4 zápasy pro draft (jen hostitel)</div>
+      <div id="l-league-filter" style="margin-bottom:10px">
+        <div class="sub-label">Filtrovat ligu</div>
+        <select id="l-league-sel" onchange="renderMatches()">
+          <option value="">Všechny</option>
+          <option value="Champions League">Champions League</option>
+          <option value="Premier League">Premier League</option>
+          <option value="La Liga">La Liga</option>
+          <option value="Bundesliga">Bundesliga</option>
+          <option value="custom">Vlastní zápasy</option>
+        </select>
+      </div>
+      <div id="l-matches"></div>
+      <hr class="divider"/>
+      <div class="sub-label">Přidat vlastní zápas</div>
+      <div style="display:flex;gap:6px">
+        <input id="l-c-home" placeholder="Tým A" style="margin:0;flex:1"/>
+        <input id="l-c-away" placeholder="Tým B" style="margin:0;flex:1"/>
+        <button class="btn sm sec" onclick="addCustomMatch()" style="white-space:nowrap">+ Přidat</button>
+      </div>
+    </div>
+
+    <div id="l-start-wrap" style="display:none">
+      <button class="btn" onclick="startGame()">Spustit draft →</button>
+    </div>
+    <div id="l-wait-start" style="display:none;text-align:center;padding:12px;color:var(--t2);font-size:13px">
+      Čeká na spuštění hostitele…
+    </div>
+  </div>
+
+  <!-- DRAFT -->
+  <div id="s-draft" class="screen">
+    <div class="draft-header">
+      <div style="font-size:11px;color:var(--t2);letter-spacing:1px;text-transform:uppercase">Na tahu</div>
+      <div class="draft-whose" id="d-whose"></div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px" id="d-progress"></div>
+    </div>
+
+    <div id="d-my-picks-wrap" style="margin-bottom:10px">
+      <div class="sub-label">Tvoji hráči</div>
+      <div class="my-picks" id="d-my-picks"></div>
+    </div>
+
+    <div class="card">
+      <div class="filter-row">
+        <div class="sec-title" style="margin:0;flex:1">Dostupní hráči</div>
+        <select id="d-filter" onchange="renderDraftPlayers()" style="width:auto;font-size:12px;padding:7px 28px 7px 10px">
+          <option value="">Všechny zápasy</option>
+        </select>
+      </div>
+      <div id="d-players"></div>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div id="s-game" class="screen">
+    <div class="tabs">
+      <button class="tab active" onclick="gtab('live',this)">Live</button>
+      <button class="tab" onclick="gtab('roster',this)">Sestavy</button>
+      <button class="tab" onclick="gtab('ledger',this)">Účetnictví</button>
+    </div>
+
+    <div id="gt-live">
+      <div class="scores">
+        <div class="score-box">
+          <div class="score-num" id="gs1">0</div>
+          <div class="score-name" id="gn1">—</div>
+        </div>
+        <div class="score-box">
+          <div class="score-num" id="gs2">0</div>
+          <div class="score-name" id="gn2">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="info-row"><div class="info-lbl">Sázka za gól</div><div class="info-val" id="g-bet-lbl"></div></div>
+        <div class="info-row"><div class="info-lbl">Celkový dluh</div><div class="info-val" id="g-debt"></div></div>
+        <div class="info-row"><div class="info-lbl">Kdo dluží</div><div class="info-val" id="g-owes"></div></div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Zaznamenat gól</div>
+        <div id="g-goal-area"></div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Průběh</div>
+        <div id="g-log"></div>
+        <button class="btn sec" onclick="undoGoal()" style="margin-top:10px">↩ Vrátit poslední gól</button>
+      </div>
+    </div>
+
+    <div id="gt-roster" style="display:none">
+      <div id="g-rosters"></div>
+    </div>
+
+    <div id="gt-ledger" style="display:none">
+      <div class="card">
+        <div class="sec-title">Přehled dluhu</div>
+        <div id="ledger-summary"></div>
+      </div>
+      <div class="card">
+        <div class="sec-title">Gólové události</div>
+        <div id="ledger-events"></div>
+      </div>
+      <button class="btn red" onclick="confirmReset()" style="margin-top:4px">Ukončit hru</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let ws = null;
+let myIdx = -1;
+let state = null;
+let allMatches = [];
+const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+
+// ─── WS ────────────────────────────────────────────────────────────────────
+function connect(onOpen) {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => { if (onOpen) onOpen(); startPing(); };
+  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+  ws.onclose = () => { stopPing(); setTimeout(() => connect(), 2000); };
+  ws.onerror = () => ws.close();
+}
+let pingTimer = null;
+function startPing() { pingTimer = setInterval(() => send({ type: 'ping' }), 20000); }
+function stopPing() { clearInterval(pingTimer); }
+function send(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
+
+function handleMsg(msg) {
+  if (msg.type === 'joined') {
+    myIdx = msg.playerIndex;
+    allMatches = msg.matches || [];
+    applyState(msg.state);
+  } else if (msg.type === 'state') {
+    applyState(msg.state);
+  } else if (msg.type === 'error') {
+    toast(msg.text, true);
+  }
+}
+
+function applyState(s) {
+  state = s;
+  showScreen(s.screen);
+  if (s.screen === 'lobby') renderLobby();
+  else if (s.screen === 'draft') renderDraft();
+  else if (s.screen === 'game') renderGame();
+}
+
+// ─── SCREENS ───────────────────────────────────────────────────────────────
+function showScreen(name) {
+  ['home','lobby','draft','game'].forEach(n => {
+    document.getElementById('s-'+n).classList.toggle('active', n === name);
+  });
+}
+function $(id) { return document.getElementById(id); }
+
+// ─── TOAST ─────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg, isErr = false) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ─── HOME ──────────────────────────────────────────────────────────────────
+function createRoom() {
+  const name = ($('c-name').value || '').trim();
+  if (!name) return toast('Zadej přezdívku!', true);
+  connect(() => send({
+    type: 'create_room',
+    name,
+    bet: parseInt($('c-bet').value) || 100,
+    draftType: $('c-draft').value,
+    picks: parseInt($('c-picks').value) || 8,
+  }));
+}
+
+function joinRoom() {
+  const name = ($('j-name').value || '').trim();
+  const code = ($('j-code').value || '').trim().toUpperCase();
+  if (!name) return toast('Zadej přezdívku!', true);
+  if (code.length !== 4) return toast('Kód musí mít 4 znaky!', true);
+  connect(() => send({ type: 'join_room', name, code }));
+}
+
+// ─── LOBBY ─────────────────────────────────────────────────────────────────
+function renderLobby() {
+  if (!state) return;
+  $('l-code').textContent = state.roomCode;
+
+  // Players list
+  const pl = $('l-players');
+  pl.innerHTML = '';
+  [0, 1].forEach(i => {
+    const p = state.players[i];
+    const row = document.createElement('div');
+    row.className = 'p-row';
+    row.innerHTML = `
+      <div>
+        <div class="p-name">${p ? p.name : '—'}</div>
+        <div class="p-meta">Hráč ${i + 1}</div>
+      </div>
+      ${p ? `<span class="badge ${p.online ? 'ok' : 'wait'}">${p.online ? 'Online' : 'Offline'}</span>` : '<span class="badge wait">Čeká</span>'}
+    `;
+    pl.appendChild(row);
+  });
+
+  const allJoined = state.players[0] && state.players[1];
+  $('l-waiting').style.display = allJoined ? 'none' : 'flex';
+
+  renderMatches();
+
+  const canStart = myIdx === 0 && allJoined && state.settings.selectedMatches.length > 0;
+  $('l-start-wrap').style.display = canStart ? 'block' : 'none';
+  $('l-wait-start').style.display = myIdx !== 0 && allJoined ? 'block' : 'none';
+}
+
+function renderMatches() {
+  if (!state) return;
+  const container = $('l-matches');
+  container.innerHTML = '';
+  const filterLeague = ($('l-league-sel') ? $('l-league-sel').value : '');
+
+  let list = allMatches;
+  if (filterLeague === 'custom') {
+    list = (state.customMatches || []).map((m, i) => ({ ...m, id: 'c' + i, league: 'Vlastní' }));
+  } else if (filterLeague) {
+    list = allMatches.filter(m => m.league === filterLeague);
+  }
+
+  if (filterLeague !== 'custom') {
+    list.forEach(m => {
+      const sel = state.settings.selectedMatches.includes(m.id);
+      const d = document.createElement('div');
+      d.className = 'match-card' + (sel ? ' sel' : '');
+      d.innerHTML = `<div class="match-teams">${m.home} <span style="color:var(--t3)">vs</span> ${m.away}</div><div class="match-meta">${m.league} ${sel ? '✓' : ''}</div>`;
+      d.onclick = () => {
+        if (myIdx !== 0) return toast('Jen hostitel vybírá zápasy');
+        send({ type: 'select_match', matchId: m.id, selected: !sel });
+      };
+      container.appendChild(d);
+    });
+  }
+
+  // Custom matches
+  if (filterLeague === '' || filterLeague === 'custom') {
+    (state.customMatches || []).forEach((m, i) => {
+      const mid = 'c' + i;
+      const sel = state.settings.selectedMatches.includes(mid);
+      const d = document.createElement('div');
+      d.className = 'match-card' + (sel ? ' sel' : '');
+      d.innerHTML = `<div class="match-teams">${m.home} <span style="color:var(--t3)">vs</span> ${m.away}</div><div class="match-meta">Vlastní zápas ${sel ? '✓' : ''}</div>`;
+      d.onclick = () => {
+        if (myIdx !== 0 && myIdx !== 1) return;
+        send({ type: 'select_match', matchId: mid, selected: !sel });
+      };
+      container.appendChild(d);
+    });
+  }
+}
+
+function addCustomMatch() {
+  const home = ($('l-c-home').value || '').trim();
+  const away = ($('l-c-away').value || '').trim();
+  if (!home || !away) return toast('Zadej oba týmy!', true);
+  send({ type: 'add_custom_match', home, away });
+  $('l-c-home').value = ''; $('l-c-away').value = '';
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(state.roomCode).then(() => toast('Kód zkopírován!'));
+}
+
+function startGame() {
+  send({ type: 'start_game' });
+}
+
+// ─── DRAFT ─────────────────────────────────────────────────────────────────
+function renderDraft() {
+  if (!state) return;
+  const picks = state.settings.picks;
+  const r0 = (state.rosters[0] || []).length;
+  const r1 = (state.rosters[1] || []).length;
+
+  if (r0 >= picks && r1 >= picks) { showScreen('game'); renderGame(); return; }
+
+  const turnIdx = state.draftOrder[state.draftPos];
+  const turnName = state.players[turnIdx]?.name || '?';
+  const isMyTurn = turnIdx === myIdx;
+  $('d-whose').textContent = isMyTurn ? 'TVÁ VOLBA!' : turnName;
+  $('d-whose').style.color = isMyTurn ? 'var(--g)' : 'var(--t1)';
+  $('d-progress').textContent = `Pick ${r0 + r1 + 1} / ${picks * 2} · ${state.settings.draftType === 'snake' ? 'Snake' : 'Manuální'} draft`;
+
+  // My picks
+  const myPicks = $('d-my-picks');
+  myPicks.innerHTML = '';
+  (state.rosters[myIdx] || []).forEach(p => {
+    const t = document.createElement('span');
+    t.className = 'tag gold';
+    t.textContent = p.n;
+    myPicks.appendChild(t);
+  });
+
+  // Filter select
+  const fil = $('d-filter');
+  if (fil.options.length <= 1) {
+    state.settings.selectedMatches.forEach(mid => {
+      const o = document.createElement('option');
+      o.value = mid;
+      o.textContent = getMatchName(mid);
+      fil.appendChild(o);
+    });
+  }
+  renderDraftPlayers();
+}
+
+function renderDraftPlayers() {
+  if (!state) return;
+  const container = $('d-players');
+  container.innerHTML = '';
+  const filterMatch = $('d-filter').value;
+  const turnIdx = state.draftOrder[state.draftPos];
+  const isMyTurn = turnIdx === myIdx;
+  const all = state.allPlayers || [];
+
+  all.forEach((p, i) => {
+    if (state.drafted[i]) return;
+    if (filterMatch && p.matchId !== filterMatch) return;
+    const btn = document.createElement('button');
+    btn.className = 'player-btn' + (!isMyTurn ? ' taken' : '');
+    btn.innerHTML = `
+      <div>
+        <div style="font-weight:500">${p.n}</div>
+        <div style="font-size:11px;color:var(--t3)">${p.t} · ${getMatchName(p.matchId)}</div>
+      </div>
+      ${isMyTurn ? '<span style="color:var(--g);font-size:12px">Vybrat →</span>' : ''}
+    `;
+    if (isMyTurn) btn.onclick = () => send({ type: 'draft_pick', playerIdx: i });
+    else btn.disabled = true;
+    container.appendChild(btn);
+  });
+
+  if (!container.children.length) {
+    container.innerHTML = '<div style="color:var(--t3);padding:8px">Žádní dostupní hráči</div>';
+  }
+}
+
+function getMatchName(mid) {
+  if (!mid) return '?';
+  if (mid.startsWith('c')) {
+    const m = (state.customMatches || [])[parseInt(mid.slice(1))];
+    return m ? `${m.home} vs ${m.away}` : 'Custom';
+  }
+  const m = allMatches.find(x => x.id === mid);
+  return m ? `${m.home} vs ${m.away}` : mid;
+}
+
+// ─── GAME ──────────────────────────────────────────────────────────────────
+function renderGame() {
+  if (!state) return;
+  const goals = state.goals || [];
+  const s0 = goals.filter(g => g.owner === 0).length;
+  const s1 = goals.filter(g => g.owner === 1).length;
+  $('gs1').textContent = s0; $('gs2').textContent = s1;
+  $('gn1').textContent = state.players[0]?.name || '—';
+  $('gn2').textContent = state.players[1]?.name || '—';
+
+  const bet = state.settings.bet || 100;
+  $('g-bet-lbl').textContent = bet + ' Kč / gól';
+  const diff = s0 - s1;
+  const debt = Math.abs(diff) * bet;
+  $('g-debt').textContent = debt + ' Kč';
+  if (diff === 0) $('g-owes').textContent = 'Vyrovnáno';
+  else $('g-owes').textContent = (diff > 0 ? state.players[1]?.name : state.players[0]?.name) + ' dluží';
+
+  // Goal buttons
+  const area = $('g-goal-area');
+  area.innerHTML = '';
+  [0, 1].forEach(ri => {
+    const roster = state.rosters[ri] || [];
+    if (!roster.length) return;
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px';
+    hdr.textContent = state.players[ri]?.name;
+    area.appendChild(hdr);
+    roster.forEach(p => {
+      const gc = goals.filter(g => g.playerName === p.n && g.owner === ri).length;
+      const row = document.createElement('div');
+      row.className = 'p-row';
+      row.innerHTML = `
+        <div>
+          <div class="p-name">${p.n}</div>
+          <div class="p-meta">${p.t}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${gc > 0 ? `<span style="font-family:'Bebas Neue';font-size:18px;color:var(--g)">⚽ ${gc}</span>` : ''}
+          <button class="goal-btn" onclick="addGoal(${ri},'${p.n.replace(/'/g,"\\'")}')">+ Gól</button>
+        </div>
+      `;
+      area.appendChild(row);
+    });
+  });
+
+  // Log
+  const log = $('g-log');
+  log.innerHTML = '';
+  [...goals].reverse().slice(0, 25).forEach(g => {
+    const d = document.createElement('div');
+    d.className = 'g-log-item';
+    d.innerHTML = `⚽ <b>${g.playerName}</b> — <span style="color:var(--t2)">${state.players[g.owner]?.name}</span> <span style="color:var(--t3);float:right">${g.time}</span>`;
+    log.appendChild(d);
+  });
+  if (!goals.length) log.innerHTML = '<div style="color:var(--t3)">Zatím žádné góly</div>';
+
+  renderRosters();
+  renderLedger();
+}
+
+function addGoal(owner, playerName) {
+  send({ type: 'add_goal', owner, playerName });
+}
+function undoGoal() { send({ type: 'undo_goal' }); }
+
+function renderRosters() {
+  if (!state) return;
+  const wrap = $('g-rosters');
+  wrap.innerHTML = '';
+  [0, 1].forEach(ri => {
+    const roster = state.rosters[ri] || [];
+    const card = document.createElement('div');
+    card.className = 'card';
+    const goals = state.goals || [];
+    card.innerHTML = `<div class="sec-title">${state.players[ri]?.name || '—'}</div>`;
+    roster.forEach(p => {
+      const gc = goals.filter(g => g.playerName === p.n && g.owner === ri).length;
+      const row = document.createElement('div');
+      row.className = 'p-row';
+      row.innerHTML = `
+        <div>
+          <div class="p-name">${p.n}</div>
+          <div class="p-meta">${p.t}</div>
+        </div>
+        <span style="font-family:'Bebas Neue';font-size:20px;color:${gc > 0 ? 'var(--g)' : 'var(--t3)'}">⚽ ${gc}</span>
+      `;
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function renderLedger() {
+  if (!state) return;
+  const goals = state.goals || [];
+  const bet = state.settings.bet || 100;
+  const s0 = goals.filter(g => g.owner === 0).length;
+  const s1 = goals.filter(g => g.owner === 1).length;
+  const diff = s0 - s1;
+  $('ledger-summary').innerHTML = `
+    <div class="info-row"><div class="info-lbl">${state.players[0]?.name} góly</div><div class="info-val">${s0} × ${bet} Kč = ${s0 * bet} Kč</div></div>
+    <div class="info-row"><div class="info-lbl">${state.players[1]?.name} góly</div><div class="info-val">${s1} × ${bet} Kč = ${s1 * bet} Kč</div></div>
+    <div class="info-row" style="border-top:1px solid #2a2a2a;padding-top:8px;margin-top:4px">
+      <div class="info-lbl" style="font-weight:500">Výsledný dluh</div>
+      <div class="info-val" style="color:var(--g)">${Math.abs(diff) * bet} Kč</div>
+    </div>
+    ${diff !== 0 ? `<div class="info-row"><div class="info-lbl">Dluží</div><div class="info-val">${diff > 0 ? state.players[1]?.name : state.players[0]?.name}</div></div>` : '<div class="info-row"><div class="info-lbl">Stav</div><div class="info-val" style="color:var(--green)">Vyrovnáno</div></div>'}
+  `;
+  const ev = $('ledger-events');
+  ev.innerHTML = '';
+  goals.forEach(g => {
+    const d = document.createElement('div');
+    d.className = 'ledger-item';
+    d.innerHTML = `
+      <div>
+        <div style="font-weight:500">${g.playerName}</div>
+        <div style="font-size:11px;color:var(--t3)">${state.players[g.owner]?.name} · ${g.time}</div>
+      </div>
+      <span style="color:var(--g);font-weight:500">+${bet} Kč</span>
+    `;
+    ev.appendChild(d);
+  });
+  if (!goals.length) ev.innerHTML = '<div style="color:var(--t3);padding:4px">Žádné góly</div>';
+}
+
+function gtab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['live', 'roster', 'ledger'].forEach(t => $('gt-' + t).style.display = t === tab ? 'block' : 'none');
+}
+
+function confirmReset() {
+  if (confirm('Ukončit hru?')) location.reload();
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
