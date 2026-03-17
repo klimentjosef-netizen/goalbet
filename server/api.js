@@ -9,13 +9,6 @@ let cachedSquads = {}; // teamId -> { teamName, players[] }
 let lastFetchTime = 0;
 const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
-// Positions to include (attacking + midfield)
-const INCLUDE_POSITIONS = new Set([
-  'Centre-Forward', 'Right Winger', 'Left Winger',
-  'Attacking Midfield', 'Second Striker', 'Offence',
-  'Central Midfield', 'Midfield',
-]);
-
 function apiRequest(endpoint) {
   return new Promise((resolve, reject) => {
     const url = new URL(API_BASE + endpoint);
@@ -59,8 +52,8 @@ async function fetchTeamSquad(teamId) {
     await new Promise(r => setTimeout(r, 6500)); // ~9 req/min to stay under 10/min
     const data = await apiRequest(`/teams/${teamId}`);
     const squad = (data.squad || [])
-      .filter(p => p.position && INCLUDE_POSITIONS.has(p.position))
-      .map(p => ({ name: p.name, position: p.position }));
+      .filter(p => p.name)
+      .map(p => ({ name: p.name, position: p.position || 'N/A' }));
 
     const result = { teamName: data.name || `Team ${teamId}`, players: squad };
     cachedSquads[teamId] = result;
